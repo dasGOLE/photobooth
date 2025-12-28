@@ -7,6 +7,7 @@ use Photobooth\Enum\ImageFilterEnum;
 use Photobooth\Factory\CollageConfigFactory;
 use Photobooth\Utility\ImageUtility;
 use Photobooth\Utility\PathUtility;
+use Photobooth\Utility\CollageLayoutScanner;
 
 class Collage
 {
@@ -27,37 +28,6 @@ class Collage
         self::$layoutPath = '';
     }
 
-    public static function getCollageConfigPath(string $collageLayout, string $pictureOrientation): ?string
-    {
-        self::$drawDashedLine =
-            $collageLayout === '2x4-2' ||
-            $collageLayout === '2x4-3' ||
-            $collageLayout === '2x3-1';
-
-        if (!str_ends_with($collageLayout, '.json')) {
-            $collageLayout .= '.json';
-        }
-
-        $relativePaths = [
-            'private/collage/' . $pictureOrientation . '/' . $collageLayout,
-            'private/collage/' . $collageLayout,
-            'private/' . $collageLayout,
-            'template/collage/' . $pictureOrientation . '/' . $collageLayout,
-            'template/collage/' . $collageLayout,
-        ];
-
-        foreach ($relativePaths as $relativePath) {
-            $absolutePath = PathUtility::getAbsolutePath($relativePath);
-
-            if (file_exists($absolutePath)) {
-                self::$layoutPath = $absolutePath;
-                return $absolutePath;
-            }
-        }
-
-        return null;
-    }
-
     public static function createCollage(array $config, array $srcImagePaths, string $destImagePath, ?ImageFilterEnum $filter = null, ?CollageConfig $c = null): bool
     {
         if ($c === null) {
@@ -71,14 +41,16 @@ class Collage
 
         self::$pictureOrientation = $c->collageOrientation;
 
-        $collageConfigFilePath = self::getCollageConfigPath($c->collageLayout, self::$pictureOrientation);
+        $layoutPath = CollageLayoutScanner::getCollageConfigPath($c->collageLayout); //needed?
+        $collageJson = CollageLayoutScanner::getLayoutData($c->collageLayout);
 
-        if ($collageConfigFilePath !== null) {
-            $collageJson = json_decode((string)file_get_contents($collageConfigFilePath), true);
+        if (!empty($collageJson)) {
 
             if (is_array($collageJson)) {
                 if (isset($collageJson['layout']) && !empty($collageJson['layout'])) {
                     $layoutConfigArray = $collageJson['layout'];
+
+                    self::$drawDashedLine = str_starts_with($collageJson['id'], '2x');
 
                     if (isset($collageJson['background_color']) && !empty($collageJson['background_color'])) {
                         $c->collageBackgroundColor = $collageJson['background_color'];
@@ -234,7 +206,7 @@ class Collage
             unset($imageResource);
         }
 
-        if (strpos($c->collageLayout, '2x') === 0) {
+        if (self::$drawDashedLine) {
             $editImages = array_merge($editImages, $editImages);
         }
 
